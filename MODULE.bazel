@@ -1,0 +1,6 @@
+module(
+	name = "vision",
+	version = "0.1.0",
+)
+
+bazel_dep(name = "eigen", version = "5.0.1")
