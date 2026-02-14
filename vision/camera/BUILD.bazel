@@ -1,0 +1,51 @@
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "camera_model",
+    hdrs = ["camera_model.h"],
+    deps = [
+        "@eigen",
+    ],
+)
+
+cc_library(
+    name = "pinhole_camera_model",
+    srcs = ["pinhole_camera_model.cc"],
+    hdrs = ["pinhole_camera_model.h"],
+    deps = [
+        ":camera_model",
+        "@eigen",
+    ],
+)
+
+cc_library(
+    name = "brown_camera_model",
+    srcs = ["brown_camera_model.cc"],
+    hdrs = ["brown_camera_model.h"],
+    deps = [
+        ":camera_model",
+        ":pinhole_camera_model",
+        "@eigen",
+    ],
+)
+
+cc_library(
+    name = "omnidirectional_camera_model",
+    srcs = ["omnidirectional_camera_model.cc"],
+    hdrs = ["omnidirectional_camera_model.h"],
+    deps = [
+        ":camera_model",
+        ":pinhole_camera_model",
+        "@eigen",
+    ],
+)
+
+cc_library(
+    name = "camera_factory",
+    hdrs = ["camera_factory.h"],
+    deps = [
+        ":pinhole_camera_model",
+        ":brown_camera_model",
+        ":omnidirectional_camera_model",
+    ],
+)
