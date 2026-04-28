@@ -1,14 +1,24 @@
 cc_library(
+	name = "camera_model",
+	hdrs = [
+		"camera_model.h",
+	],
+	deps = [
+		"@eigen//:eigen",
+	],
+	visibility = ["//visibility:public"],
+)
+
+cc_library(
 	name = "pinhole_camera_model",
 	srcs = [
 		"pinhole_camera_model.cc",
 	],
 	hdrs = [
-		"camera_model.h",
 		"pinhole_camera_model.h",
 	],
 	deps = [
-		"@eigen//:eigen",
+		":camera_model",
 	],
 	visibility = ["//visibility:public"],
 )
@@ -19,11 +29,11 @@ cc_library(
 		"omnidirectional_camera_model.cc",
 	],
 	hdrs = [
-		"camera_model.h",
 		"omnidirectional_camera_model.h",
 	],
 	deps = [
-		"@eigen//:eigen",
+		":camera_model",
+		":pinhole_camera_model",
 	],
 	visibility = ["//visibility:public"],
 )
@@ -35,10 +45,35 @@ cc_library(
 	],
 	hdrs = [
 		"brown_camera_model.h",
-		"camera_model.h",
 	],
 	deps = [
-		"@eigen//:eigen",
+		":camera_model",
+		":pinhole_camera_model",
 	],
 	visibility = ["//visibility:public"],
+)
+
+cc_library(
+	name = "camera_models",
+	hdrs = [
+		"camera_models.h",
+	],
+	deps = [
+		":brown_camera_model",
+		":camera_model",
+		":omnidirectional_camera_model",
+		":pinhole_camera_model",
+	],
+	visibility = ["//visibility:public"],
+)
+
+cc_test(
+	name = "camera_models_test",
+	srcs = [
+		"camera_models_test.cc",
+	],
+	deps = [
+		":camera_models",
+		"@googletest//:gtest_main",
+	],
 )

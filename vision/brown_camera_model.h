@@ -8,33 +8,36 @@ namespace wheel {
 namespace vision {
 
 class BrownCameraModel : public CameraModel {
-public:
+ public:
   BrownCameraModel() = default;
   ~BrownCameraModel() override = default;
 
-  // Initialize the interface and explicitly specify the distortion parameters
-  void Init(uint32_t width, uint32_t height, const Eigen::Matrix3f &intrinsics,
-            const Eigen::Matrix<float, 5, 1> &dist_coeffs);
+  // Initializes the model with OpenCV-compatible Brown-Conrady coefficients:
+  // (k1, k2, p1, p2, k3).
+  bool Init(uint32_t width, uint32_t height, const Eigen::Matrix3f& intrinsics,
+            const Eigen::Matrix<float, 5, 1>& dist_coeffs);
+  bool Init(uint32_t width, uint32_t height, const Eigen::Matrix3f& intrinsics,
+            const BrownDistortionCoefficients& dist_coeffs);
 
-  bool RayToPixel(const Eigen::Vector3f &ray,
-                  Eigen::Vector2f *pixel) const override;
+  bool RayToPixel(const Eigen::Vector3f& ray,
+                  Eigen::Vector2f* pixel) const override;
 
-  bool PixelToRay(const Eigen::Vector2f &pixel,
-                  Eigen::Vector3f *ray) const override;
+  bool PixelToRay(const Eigen::Vector2f& pixel,
+                  Eigen::Vector3f* ray) const override;
 
   std::shared_ptr<CameraModel> GetIdealModel() const override;
 
   CameraModelType Type() const override { return CameraModelType::kBrown; }
   std::string Name() const override { return "BrownCameraModel"; }
 
-  inline const Eigen::Matrix<float, 5, 1> &distort_params() const {
+  inline const Eigen::Matrix<float, 5, 1>& distort_params() const {
     return distort_params_;
   }
 
-private:
+ private:
   Eigen::Matrix<float, 5, 1> distort_params_ =
       Eigen::Matrix<float, 5, 1>::Zero();
 };
 
-} // namespace vision
-} // namespace wheel
+}  // namespace vision
+}  // namespace wheel

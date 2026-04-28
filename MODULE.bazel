@@ -4,3 +4,4 @@ module(
 )
 
 bazel_dep(name = "eigen", version = "5.0.1")
+bazel_dep(name = "googletest", version = "1.14.0")

@@ -2,114 +2,200 @@
 
 #include <cmath>
 
+#include "vision/pinhole_camera_model.h"
+
 namespace wheel {
 namespace vision {
 
 namespace {
-constexpr float kEpsilon = 1e-8f;
+constexpr float kEpsilon = 1e-6f;
+constexpr int kMaxIterations = 20;
+constexpr float kConvergenceEps = 1e-6f;
 
-float EvalPoly(const std::vector<float> &coeffs, float x) {
-  float result = 0.0f;
-  float xn = 1.0f;
-  for (float c : coeffs) {
-    result += c * xn;
-    xn *= x;
-  }
-  return result;
-}
-} // namespace
-
-void OmnidirectionalCameraModel::Init(uint32_t width, uint32_t height,
-                                      const Eigen::Matrix3f &intrinsics,
-                                      const std::vector<float> &cam2world,
-                                      const std::vector<float> &world2cam,
-                                      const std::array<float, 3> &affine,
-                                      const std::array<float, 2> &center) {
-  width_ = width;
-  height_ = height;
-  intrinsic_matrix_ = intrinsics;
-  cam2world_ = cam2world;
-  world2cam_ = world2cam;
-  affine_[0] = affine[0];
-  affine_[1] = affine[1];
-  affine_[2] = affine[2];
-  center_[0] = center[0];
-  center_[1] = center[1];
-}
-
-bool OmnidirectionalCameraModel::RayToPixel(const Eigen::Vector3f &ray,
-                                            Eigen::Vector2f *pixel) const {
-  const float x = ray.x();
-  const float y = ray.y();
-  const float z = ray.z();
-
-  const float norm = std::sqrt(x * x + y * y);
-  if (norm < kEpsilon) {
-    pixel->x() = center_[0];
-    pixel->y() = center_[1];
-    return true;
+bool DistortOmnidirectionalPoint(const Eigen::Vector2f& undistorted,
+                                 const Eigen::Matrix<float, 4, 1>& dist_coeffs,
+                                 Eigen::Vector2f* distorted) {
+  if (distorted == nullptr || !undistorted.allFinite() ||
+      !dist_coeffs.allFinite()) {
+    return false;
   }
 
-  // Incident angle theta (OCamCalib)
-  const float theta = std::atan2(z, norm);
-  const float rho = EvalPoly(world2cam_, theta);
+  const float x = undistorted.x();
+  const float y = undistorted.y();
+  const float r2 = x * x + y * y;
+  const float r4 = r2 * r2;
+  const float k1 = dist_coeffs[0];
+  const float k2 = dist_coeffs[1];
+  const float p1 = dist_coeffs[2];
+  const float p2 = dist_coeffs[3];
 
-  const float x_img = (x / norm) * rho;
-  const float y_img = (y / norm) * rho;
+  const float radial = 1.0f + k1 * r2 + k2 * r4;
+  distorted->x() = x * radial + 2.0f * p1 * x * y + p2 * (r2 + 2.0f * x * x);
+  distorted->y() = y * radial + p1 * (r2 + 2.0f * y * y) + 2.0f * p2 * x * y;
 
-  // Affine + principal point
-  pixel->x() = x_img * affine_[0] + y_img * affine_[1] + center_[0];
-  pixel->y() = x_img * affine_[2] + y_img + center_[1];
+  return distorted->allFinite();
+}
+}  // namespace
+
+bool OmnidirectionalCameraModel::Init(
+    uint32_t width, uint32_t height, const Eigen::Matrix3f& intrinsics,
+    float xi, const Eigen::Matrix<float, 4, 1>& dist_coeffs) {
+  if (!InitializeBase(width, height, intrinsics) || !std::isfinite(xi) ||
+      xi < 0.0f || !dist_coeffs.allFinite()) {
+    ResetBaseState();
+    xi_ = 0.0f;
+    distort_params_.setZero();
+    return false;
+  }
+
+  xi_ = xi;
+  distort_params_ = dist_coeffs;
   return true;
 }
 
-bool OmnidirectionalCameraModel::PixelToRay(const Eigen::Vector2f &pixel,
-                                            Eigen::Vector3f *ray) const {
-  const float u = pixel.x();
-  const float v = pixel.y();
-
-  // Inverse affine transformation
-  const float c = affine_[0];
-  const float d = affine_[1];
-  const float e = affine_[2];
-  const float denom = (c - d * e);
-  if (std::abs(denom) < kEpsilon) {
+bool OmnidirectionalCameraModel::Init(
+    uint32_t width, uint32_t height, const Eigen::Matrix3f& intrinsics,
+    float xi, const OmnidirectionalDistortionCoefficients& dist_coeffs) {
+  if (!dist_coeffs.IsFinite()) {
+    ResetBaseState();
+    xi_ = 0.0f;
+    distort_params_.setZero();
     return false;
   }
 
-  const float x_img = (u - center_[0] - d * (v - center_[1])) / denom;
-  const float y_img = (v - center_[1] - e * x_img);
+  return Init(width, height, intrinsics, xi, dist_coeffs.ToVector());
+}
 
-  const float rho = std::sqrt(x_img * x_img + y_img * y_img);
-  const float z = EvalPoly(cam2world_, rho);
-
-  ray->x() = x_img;
-  ray->y() = y_img;
-  ray->z() = z;
-
-  // Normalize to unit vectors to avoid scale ambiguity.
-  const float norm = std::sqrt(ray->x() * ray->x() + ray->y() * ray->y() +
-                               ray->z() * ray->z());
-  if (norm < kEpsilon) {
+bool OmnidirectionalCameraModel::RayToPixel(const Eigen::Vector3f& ray,
+                                            Eigen::Vector2f* pixel) const {
+  if (pixel == nullptr || !is_initialized() || !ray.allFinite()) {
     return false;
   }
-  ray->x() /= norm;
-  ray->y() /= norm;
-  ray->z() /= norm;
+
+  const float ray_norm = ray.norm();
+  if (ray_norm <= kEpsilon) {
+    return false;
+  }
+
+  const Eigen::Vector3f sphere = ray / ray_norm;
+  const float denominator = sphere.z() + xi_;
+  if (denominator <= kEpsilon) {
+    return false;
+  }
+
+  Eigen::Vector2f distorted;
+  if (!DistortOmnidirectionalPoint(
+          Eigen::Vector2f(sphere.x() / denominator, sphere.y() / denominator),
+          distort_params_, &distorted)) {
+    return false;
+  }
+
+  pixel->x() = intrinsic_matrix_(0, 0) * distorted.x() +
+               intrinsic_matrix_(0, 1) * distorted.y() +
+               intrinsic_matrix_(0, 2);
+  pixel->y() =
+      intrinsic_matrix_(1, 1) * distorted.y() + intrinsic_matrix_(1, 2);
+  return pixel->allFinite();
+}
+
+bool OmnidirectionalCameraModel::PixelToRay(const Eigen::Vector2f& pixel,
+                                            Eigen::Vector3f* ray) const {
+  if (ray == nullptr || !is_initialized() || !pixel.allFinite()) {
+    return false;
+  }
+
+  const float fx = intrinsic_matrix_(0, 0);
+  const float fy = intrinsic_matrix_(1, 1);
+  if (fx <= kEpsilon || fy <= kEpsilon) {
+    return false;
+  }
+
+  const float y_plane = (pixel.y() - intrinsic_matrix_(1, 2)) / fy;
+  const float x_plane = (pixel.x() - intrinsic_matrix_(0, 2) -
+                         intrinsic_matrix_(0, 1) * y_plane) /
+                        fx;
+
+  const float k1 = distort_params_[0];
+  const float k2 = distort_params_[1];
+  const float p1 = distort_params_[2];
+  const float p2 = distort_params_[3];
+
+  float x_undistorted = x_plane;
+  float y_undistorted = y_plane;
+  bool converged = false;
+  for (int i = 0; i < kMaxIterations; ++i) {
+    const float r2 =
+        x_undistorted * x_undistorted + y_undistorted * y_undistorted;
+    const float r4 = r2 * r2;
+    const float radial = 1.0f + k1 * r2 + k2 * r4;
+    if (std::abs(radial) <= kEpsilon) {
+      return false;
+    }
+
+    const float next_x = (x_plane - 2.0f * p1 * x_undistorted * y_undistorted -
+                          p2 * (r2 + 2.0f * x_undistorted * x_undistorted)) /
+                         radial;
+    const float next_y =
+        (y_plane - p1 * (r2 + 2.0f * y_undistorted * y_undistorted) -
+         2.0f * p2 * x_undistorted * y_undistorted) /
+        radial;
+    if (!std::isfinite(next_x) || !std::isfinite(next_y)) {
+      return false;
+    }
+
+    if (std::abs(next_x - x_undistorted) < kConvergenceEps &&
+        std::abs(next_y - y_undistorted) < kConvergenceEps) {
+      x_undistorted = next_x;
+      y_undistorted = next_y;
+      converged = true;
+      break;
+    }
+
+    x_undistorted = next_x;
+    y_undistorted = next_y;
+  }
+
+  if (!converged) {
+    return false;
+  }
+
+  const float r2 =
+      x_undistorted * x_undistorted + y_undistorted * y_undistorted;
+  const float a = r2 + 1.0f;
+  const float b = 2.0f * xi_ * r2;
+  const float c = r2 * xi_ * xi_ - 1.0f;
+  const float discriminant = b * b - 4.0f * a * c;
+  if (discriminant < 0.0f) {
+    return false;
+  }
+
+  const float zs = (-b + std::sqrt(discriminant)) / (2.0f * a);
+  const float scale = zs + xi_;
+  if (scale <= kEpsilon) {
+    return false;
+  }
+
+  ray->x() = x_undistorted * scale;
+  ray->y() = y_undistorted * scale;
+  ray->z() = zs;
+
+  const float ray_norm = ray->norm();
+  if (ray_norm <= kEpsilon) {
+    return false;
+  }
+
+  *ray /= ray_norm;
   return true;
 }
 
 std::shared_ptr<CameraModel> OmnidirectionalCameraModel::GetIdealModel() const {
-  auto model = std::make_shared<OmnidirectionalCameraModel>();
-  std::array<float, 3> affine_arr = { affine_[0], affine_[1], affine_[2] };
-  std::array<float, 2> center_arr = { center_[0], center_[1] };
+  if (!is_initialized()) {
+    return nullptr;
+  }
 
-  model->Init(width_, height_, intrinsic_matrix_,
-              cam2world_, world2cam_,
-              affine_arr, center_arr);
-
-  return model;
+  auto model = std::make_shared<PinholeCameraModel>();
+  return model->Init(width_, height_, intrinsic_matrix_) ? model : nullptr;
 }
 
-} // namespace vision
-} // namespace wheel
+}  // namespace vision
+}  // namespace wheel
