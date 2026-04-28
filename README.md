@@ -35,3 +35,11 @@ The module provides self-implemented projection and back-projection models:
 - `BrownCameraModel` with OpenCV-compatible `(k1, k2, p1, p2, k3)` ordering
 - `OmnidirectionalCameraModel` with OpenCV `omnidir`-compatible `xi` and
   `(k1, k2, p1, p2)` ordering
+
+## Context Docs
+
+Project context, references, and engineering TODOs live under:
+
+```text
+docs/context/
+```
