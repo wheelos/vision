@@ -19,8 +19,14 @@ most useful context close to the codebase:
 
 ## Structure
 
-- `camera-models.md`: current implementation context for the camera model
-  module.
+- `camera.md`: canonical package boundary and compatibility policy for camera.
+- `camera-models.md`: model-specific behavior and parameter conventions.
+- `lidar.md`: current lidar architecture, public API, and GPU implementation
+  status.
+- `driveworks-replacement.md`: staged roadmap for DriveWorks-class lidar base
+  library parity.
+- `apollo-lite-replacement.md`: mapping from Apollo-lite lidar preprocessing
+  responsibilities to the modular `vision/lidar` replacement plan.
 - `todo.md`: near-term and medium-term backlog for production hardening.
 - `context-practices.md`: how to keep this directory useful over time.
 - `adr-template.md`: template for future Architecture Decision Records.
@@ -39,8 +45,8 @@ This directory follows two widely used documentation practices:
 When a meaningful feature or refactor lands, update this directory in the same
 change whenever possible:
 
-1. Update `camera-models.md` or the relevant context file with new invariants,
-   assumptions, public API changes, or validation commands.
+1. Update `camera.md`, `lidar.md`, or the relevant context file with new
+   invariants, assumptions, public API changes, or validation commands.
 2. Update `todo.md` if the change closes or creates meaningful follow-up work.
 3. Add an ADR using `adr-template.md` if the change affects architecture,
    module boundaries, parameter conventions, or compatibility expectations.

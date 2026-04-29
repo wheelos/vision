@@ -1,8 +1,8 @@
-#include "vision/brown_camera_model.h"
+#include "vision/camera/brown_camera_model.h"
 
 #include <cmath>
 
-#include "vision/pinhole_camera_model.h"
+#include "vision/camera/pinhole_camera_model.h"
 
 namespace wheel {
 namespace vision {

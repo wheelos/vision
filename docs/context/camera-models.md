@@ -2,24 +2,25 @@
 
 ## Scope
 
-The `vision/` module currently provides self-implemented camera projection and
-back-projection models intended for low-level vision use:
+The canonical camera package now lives under `vision/camera/` and provides
+self-implemented camera projection and back-projection models intended for
+low-level vision use:
 
 - `PinholeCameraModel`
 - `BrownCameraModel`
 - `OmnidirectionalCameraModel`
-- umbrella header: `vision/camera_models.h`
+- umbrella header: `vision/camera/camera.h`
 
 The implementation is designed to be consumed from Bazel/bzlmod as:
 
 ```cpp
-#include "vision/camera_models.h"
+#include "vision/camera/camera.h"
 ```
 
 with:
 
 ```bzl
-deps = ["@vision//vision:camera_models"]
+deps = ["@vision//vision/camera:camera"]
 ```
 
 ## External references
@@ -37,7 +38,7 @@ first source of truth when evolving projection behavior or parameter semantics.
 
 ### Base API
 
-`vision/camera_model.h` is the common surface:
+`vision/camera/camera_model.h` is the common surface:
 
 - validates initialization state
 - exposes `RayToPixel` and `PixelToRay`
@@ -83,27 +84,29 @@ These assumptions should stay stable unless an ADR explicitly changes them:
 - Invalid, singular, or non-finite inputs must return `false`.
 - The library should remain **self-implemented** and must not depend on OpenCV
   at runtime for projection math.
-- Public include paths should remain stable under `vision/` for bzlmod users.
+- Public include paths should remain stable under `vision/camera/` for bzlmod
+  users.
 
 ## File map
 
-- `vision/camera_model.h`
-- `vision/pinhole_camera_model.h`
-- `vision/pinhole_camera_model.cc`
-- `vision/brown_camera_model.h`
-- `vision/brown_camera_model.cc`
-- `vision/omnidirectional_camera_model.h`
-- `vision/omnidirectional_camera_model.cc`
-- `vision/camera_models.h`
-- `vision/camera_models_test.cc`
-- `vision/BUILD.bazel`
+- `vision/camera/camera_model.h`
+- `vision/camera/pinhole_camera_model.h`
+- `vision/camera/pinhole_camera_model.cc`
+- `vision/camera/brown_camera_model.h`
+- `vision/camera/brown_camera_model.cc`
+- `vision/camera/omnidirectional_camera_model.h`
+- `vision/camera/omnidirectional_camera_model.cc`
+- `vision/camera/camera_models.h`
+- `vision/camera/camera.h`
+- `vision/camera/camera_models_test.cc`
+- `vision/camera/BUILD.bazel`
 
 ## Validation command
 
 Use the repository test entry point for this module:
 
 ```bash
-bazel test //vision:all
+bazel test //vision/camera:all
 ```
 
 ## Open questions

@@ -1,0 +1,158 @@
+load("@rules_cuda//cuda:defs.bzl", "cuda_library", "cuda_test")
+
+cc_library(
+    name = "types",
+    hdrs = ["types.h"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "runtime",
+    hdrs = ["runtime/cuda_stream.h"],
+    visibility = ["//visibility:public"],
+)
+
+cuda_library(
+    name = "buffer",
+    srcs = ["memory/buffer.cu"],
+    hdrs = ["memory/buffer.h"],
+    deps = [
+        ":runtime",
+        ":types",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "buffer_pool",
+    srcs = ["memory/buffer_pool.cc"],
+    hdrs = ["memory/buffer_pool.h"],
+    deps = [
+        ":buffer",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "core",
+    srcs = [
+        "core/point_cloud.cc",
+        "core/point_cloud_buffer.cc",
+    ],
+    hdrs = [
+        "core/point_cloud.h",
+        "core/point_cloud_buffer.h",
+        "core/rigid_transform.h",
+    ],
+    deps = [
+        ":buffer",
+        ":runtime",
+        ":types",
+        "@eigen//:eigen",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "range_image_api",
+    hdrs = [
+        "range_image/range_image.h",
+        "range_image/range_image_builder.h",
+    ],
+    deps = [
+        ":buffer",
+        ":core",
+        ":runtime",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cuda_library(
+    name = "range_image",
+    srcs = ["range_image/range_image_builder.cu"],
+    deps = [
+        ":range_image_api",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cuda_library(
+    name = "filters",
+    srcs = [
+        "filters/crop_box_filter.cu",
+        "filters/decimation_filter.cu",
+        "filters/internal/device_filter_utils.cuh",
+    ],
+    hdrs = [
+        "filters/crop_box_filter.h",
+        "filters/decimation_filter.h",
+    ],
+    deps = [
+        ":buffer",
+        ":core",
+        ":runtime",
+        ":types",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "lidar",
+    hdrs = ["lidar.h"],
+    deps = [
+        ":buffer",
+        ":buffer_pool",
+        ":core",
+        ":filters",
+        ":range_image",
+        ":range_image_api",
+        ":runtime",
+        ":types",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "point_cloud_view_test",
+    srcs = ["point_cloud_view_test.cc"],
+    deps = [
+        ":core",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "point_cloud_buffer_test",
+    srcs = ["point_cloud_buffer_test.cc"],
+    deps = [
+        ":core",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cuda_test(
+    name = "range_image_test",
+    srcs = ["range_image_test.cc"],
+    deps = [
+        ":lidar",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cuda_test(
+    name = "decimation_filter_test",
+    srcs = ["decimation_filter_test.cc"],
+    deps = [
+        ":lidar",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cuda_test(
+    name = "crop_box_filter_test",
+    srcs = ["crop_box_filter_test.cc"],
+    deps = [
+        ":lidar",
+        "@googletest//:gtest_main",
+    ],
+)

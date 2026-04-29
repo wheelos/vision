@@ -2,7 +2,7 @@
 
 #include <memory>
 
-#include "vision/camera_model.h"
+#include "vision/camera/camera_model.h"
 
 namespace wheel {
 namespace vision {

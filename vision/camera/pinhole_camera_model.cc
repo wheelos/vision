@@ -1,4 +1,4 @@
-#include "vision/pinhole_camera_model.h"
+#include "vision/camera/pinhole_camera_model.h"
 
 #include <cmath>
 

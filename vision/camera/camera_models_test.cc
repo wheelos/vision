@@ -1,4 +1,4 @@
-#include "vision/camera_models.h"
+#include "vision/camera/camera_models.h"
 
 #include <memory>
 
